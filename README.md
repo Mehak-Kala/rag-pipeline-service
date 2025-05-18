@@ -1,3 +1,6 @@
+A scalable, containerized Retrieval-Augmented Generation (RAG) system that allows users to upload up to 20 PDF documents (each up to 1000 pages) and query them using a conversational interface powered by Google Gemini. Built with Flask, FAISS, HuggingFace embeddings, and Docker.
+
+The application is containerized using Docker. You can deploy it on any platform that supports Docker, such as AWS, GCP, or Azure.
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
