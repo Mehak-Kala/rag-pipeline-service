@@ -1,5 +1,7 @@
 import os
 import pathlib
+import json
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -29,6 +31,9 @@ INDEX_FOLDER = "faiss_indexes"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(INDEX_FOLDER, exist_ok=True)
 
+# Metadata file
+METADATA_FILE = "doc_metadata.json"
+
 # Env-vars
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -46,13 +51,33 @@ llm = ChatOpenAI(
     temperature=0.0
 )
 
+# Metadata helpers
+def load_metadata():
+    if os.path.exists(METADATA_FILE):
+        with open(METADATA_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+
+def save_metadata_entry(filename, num_chunks):
+    data = load_metadata()
+    entry = {
+        "filename": filename,
+        "upload_time": datetime.utcnow().isoformat() + "Z",
+        "chunks": num_chunks
+    }
+    data.append(entry)
+    with open(METADATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
 def pdf_loader(pdf_path):
     loader = PyPDFLoader(pdf_path)
     docs = loader.load()
-    # enforce per-PDF page limit
     if len(docs) > 1000:
         raise ValueError(f"PDF has {len(docs)} pages; exceeds 1,000-page limit.")
     return docs
+
 
 def text_chunking(docs):
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=20)
@@ -80,7 +105,6 @@ def upload_files():
         file.save(save_path)
 
         try:
-            # load, chunk, index
             docs = pdf_loader(save_path)
             chunks = text_chunking(docs)
 
@@ -89,6 +113,9 @@ def upload_files():
             index_path = os.path.join(INDEX_FOLDER, index_name)
             os.makedirs(index_path, exist_ok=True)
             faiss_index.save_local(index_path)
+
+            # Save metadata
+            save_metadata_entry(filename, len(chunks))
 
             saved.append(filename)
 
@@ -155,5 +182,10 @@ def query_uploaded():
     except Exception as e:
         return jsonify({"error": f"Error during query: {str(e)}"}), 500
 
+@app.route("/metadata", methods=["GET"])
+def get_metadata():
+    return jsonify(load_metadata()), 200
+
 if __name__ == "__main__":
     app.run(debug=True, port=8082)
+
